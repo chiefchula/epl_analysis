@@ -1,0 +1,75 @@
+---
+title: "Premier League 2024/25"
+caption: "What the Data Reveals"
+author: "Thomas Chula"
+date: "`r Sys.Date()"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(DT)
+
+# load and prepare data
+epl_raw <- read.csv("https://www.football-data.co.uk/mmz4281/2425/E0.csv")
+
+# Calculate league table
+matches <- epl_raw %>%
+  mutate(across('Date', ~dmy(.))) %>% 
+  mutate(
+    home_points = case_when(
+      FTHG > FTAG ~ 3,
+      FTHG == FTAG ~ 1,
+      TRUE ~ 0
+    ),
+    away_points = case_when(
+      FTAG > FTHG ~ 3,
+      FTHG == FTAG ~ 1,
+      TRUE ~ 0
+    )
+  )
+
+home_stats <- matches %>%
+  select(Team = HomeTeam, Points = home_points, Goals = FTHG, Goals_against = FTAG)
+
+away_stats <- matches %>%
+  select(Team = AwayTeam, Points = away_points, Goals = FTAG, Goals_against = FTHG)
+
+league_table <- bind_rows(home_stats, away_stats) %>%
+  group_by(Team) %>%
+  summarise(
+    Pld = n(),
+    W = sum(Points == 3),
+    D = sum(Points == 1),
+    L = sum(Points == 0),
+    GF = sum(Goals),
+    GA = sum(Goals_against),
+    GD = GF - GA,
+    Pts = sum(Points)
+  ) %>%
+  arrange(desc(Pts), desc(GD), desc(GF)) %>%
+  mutate(Rank = row_number()) %>%
+  select(Rank, everything())
+
+```
+
+## Executive Summary
+
+```{r summary-stats}
+# calculate key season stats
+total_goals <- sum(league_table$GF)
+avg_goals <- round(total_goals / nrow(matches), 1)
+total_cards <- sum(epl_raw$HY, na.rm=TRUE) + sum(epl_raw$AY, na.rm = TRUE)
+
+```
+<!-- Based on `r nrow(matches)` matches played from `r format(min(epl_raw$Date), "%B %d, %Y")` to `r format(max(epl_raw$Date), "%B %d, %Y")` -->

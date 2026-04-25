@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1425057/45bc016f2b2146daa7fec94b94ef632b
+bundleId: https://api.rpubs.com/api/v1/document/1425057/45bc016f2b2146daa7fec94b94ef632b
+url: http://rpubs.com/ThomasChula/1425057
+version: 1

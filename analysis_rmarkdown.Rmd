@@ -1,5 +1,5 @@
 ---
-title: "Premier League Table 2024/25"
+title: "Premier League Table 2025/26"
 caption: "From Raw Data to League Standings"
 author: Thomas Chula
 output:
@@ -20,23 +20,25 @@ knitr::opts_chunk$set(
 library(tidyverse)
 library(knitr)
 library(DT)
+library(kableExtra)
 ```
 
 ## Project Overview
 
 This report builds the **Premier League 2024/25 league table** from scratch using only raw match data.
 
--   **Data Source:** `https://football-data.co.uk/mmz4281/2425/E0.csv`.
+-   **Data Source:** `https://football-data.co.uk/mmz4281/2526/E0.csv`.
 -   **Rows:** 380 matches
--   **Methodology:** No pre-calculated points - everything derived from `FTHG` and `FTAG`.
+-   **Methodology:** No pre-calculated points - everything derived from `FTHG` (Full Time Home Goals) and `FTAG` (Full Time Away Goals).
 
 ## 1. Load Raw Data
 
 ```{r load-data}
 # Read data directly from source
-epl_raw <- read_csv("https://football-data.co.uk/mmz4281/2425/E0.csv")
+epl_raw <- read_csv("https://football-data.co.uk/mmz4281/2526/E0.csv")
 epl_raw <- epl_raw %>% 
-  select(-(B365H:last_col()))
+  select(-(B365H:last_col())) %>% 
+  mutate(date = dmy(Date))
 
 # Basic info
 cat("Data Info:\n")
@@ -44,19 +46,41 @@ cat("Total matches:", nrow(epl_raw), "\n")
 cat("Total columns", ncol(epl_raw), "\n")
 
 #convert excel dates to proper R dates
-convert_excel_date <- function(excel_date) {
-  as.Date(excel_date, origin = "1899-12-30")
-}
 
-epl_raw$Date <- convert_excel_date(epl_raw$Date)
+min_date <- epl_raw %>% select(date) %>% arrange(date) %>% head(n = 1) %>%  pull(date)
+max_date <- epl_raw %>% select(date) %>% arrange(date) %>% tail(n = 1) %>%  pull(date)
 
-cat("Date range", min(epl_raw$Date), "to", max(epl_raw$Date),
+cat("The league started on", as.character(min_date), "and ended on", as.character(max_date),
     "\n\n")
+```
+## 2. Key Column Descriptions
+Before building the league table, let's understand what we're working with. The dataset contains 380 rows (one per match) with over 100 columns. For this analysis, we only need a handful of columns.
 
-# Preview first 5 matches
-cat(" First 5 matches:\n")
-epl_raw[1:5, c("Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR")] %>% 
-  kable(caption = "Raw match data preview")
+```{r}
+column_desc <- data.frame(
+  Column_Name = c("Date","Time","HomeTeam", "AwayTeam", "FTHG", "FTAG", "FTR", "Referee", "HS", "AS", "HST", "AST"),
+  Description = c("Match date","Time match started", "Home team name", "Away team name", "Full-time home goals", 
+                  "Full-time away goals", "Full Time Results", "Referee of the match", "Home Team Shots", "Away Team Shots", "Home Team Shots on Target", "Away Team Shots on Target")
+)
+
+# View it
+column_desc %>% 
+  # kable() %>% 
+  kable(caption = "Premier League Table") %>%
+  kable_styling(bootstrap_options = c("bordered", "striped"),
+                full_width = TRUE)
+```
+
+
+## 3. Raw Data Preview
+Before any calculations, let's examine the raw match data. The dataset contains 380 rows (one per match) with over 100 columns including match statistics, betting odds, and derived metrics.
+
+For this analysis, we focus on the essential columns: match date, teams, full-time scores, and basic attacking metrics.
+```{r}
+epl_raw[1:6, c("date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "HS", "AS")] %>%
+  kable(caption = "First 6 matches of the 2024/25 Premier League season") %>% 
+  kable_styling(bootstrap_options = c("bordered", "striped"),
+                full_width = TRUE)
 ```
 
 ## 2. Calculate Match Results
@@ -85,9 +109,10 @@ matches <- epl_raw %>%
   )
   
 # sample calculation
-cat("Sample points calculation (Game week 1):\n")
 matches[1:3, c("HomeTeam", "AwayTeam", "FTHG", "FTAG", "home_points", "away_points")] %>% 
-  kable()
+  kable(caption = "Sample points calculation (Game week 1)") %>%
+  kable_styling(bootstrap_options = c("bordered", "striped"),
+                full_width = TRUE)
 ```
 
 ## 3. Build League Table
@@ -143,19 +168,22 @@ datatable(league_table,
 
 ```{r top-performers}
 # Top 6 (champions League spots)
-cat("**Top 6 (Champions League Qualification):**\n")
+# cat("**Top 6 (Champions League Qualification):**\n")
 league_table %>% 
   head(6) %>% 
   select(Rank, Team, MP, W, D, L, GF, GA, GD, Pts) %>% 
-  kable()
+  kable(caption = "Top 6 (Champions League Qualification)") %>%
+  kable_styling(bootstrap_options = c("bordered", "striped"),
+                full_width = TRUE)
 
 
 # Relegation zone (bottom 3)
-cat("\n**Relegation Zone (Bottom 3):**\n")
 league_table %>% 
   tail(3) %>% 
   select(Rank, Team, MP, W, D, L, GF, GA, GD, Pts) %>% 
-  kable()  
+  kable(caption = "Relegation Zone (Bottom 3)") %>%
+  kable_styling(bootstrap_options = c("bordered", "striped"),
+                full_width = TRUE)
 ```
 
 ## 5. Attack & Defense Analysis
@@ -183,31 +211,24 @@ league_table %>%
 ```{r validation}
 # Check total points distribution
 total_points <- sum(league_table$Pts)
-expected_points <- nrow(matches) * 3
+total_matches <- nrow(matches)
+total_wins <- sum(matches$home_points == 3 | matches$away_points == 3)
+total_draws <- sum(matches$home_points == 1 & matches$away_points == 1)
+
+expected_points <- (total_wins * 3) + (total_draws * 2)
 
 cat("**Validation Check:**\n")
 cat("- Total points in table:", total_points, "\n")
 cat("- Expected total points (3 per match):", expected_points, "\n")
-cat("- Match:", ifelse(total_points == expected_points,"PASS","FAIL"), "\n")
+cat("- Match:", ifelse(total_points == expected_points,"\u2713 PASS","\u2717 FAIL"), "\n")
 
 # Check if any team has incorrect matches count
 expected_matches <- nrow(matches) * 2 # Each match involves 2 teams
 actual_team_matches <- sum(league_table$MP)
 cat("\n -Expected team-match instances:", expected_matches, "\n")
 cat("- Actual team-macth instances:", actual_team_matches, "\n")
-cat("- Match:", ifelse(expected_matches == actual_team_matches,"PASS", "FAIL"))
+cat("- Match:", ifelse(expected_matches == actual_team_matches,"\u2713 PASS", "\u2717 FAIL"))
 ```
-
-### Visual Comparison
-
-Below is the official Premier League table for comparison with our calculated results.
-
-```{r image}
-knitr::include_graphics("epl_first_10.png")
-knitr::include_graphics("epl_last_10.png")
-```
-
-**Note:** Our calculated table should match the official standings exactly. Any differences would indicate data quality issues or logic errors.
 
 ## 7. Export Results
 
